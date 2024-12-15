@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>不足栄養素の調整</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #ffe4c1;
+            color: #333;
+        }
+        .container {
+            margin-top: 20px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        h1, h3 {
+            color: #d35400;
+        }
+        .d-flex {
+            display: flex;
+            gap: 20px;
+        }
+        .compact-section {
+            flex: 1;
+            overflow-x: auto;
+        }
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            white-space: nowrap;
+        }
+        table th, table td {
+            padding: 8px 12px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        table th {
+            background-color: #f5c089;
+            color: #fff;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .table-danger {
+            background-color: #ffdddd !important;
+        }
+        .table-success {
+            background-color: #ddffdd !important;
+        }
+        .fixed-left {
+            position: sticky;
+            left: 0;
+            background-color: #f5c089;
+            z-index: 11;
+        }
+        .list-group-item {
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>不足栄養素の調整</h1>
+
+        <!-- 上部エリア -->
+        <div class="d-flex">
+            <!-- 左上: 栄養素適合状況 -->
+            <div class="compact-section">
+                <h3>栄養素適合状況</h3>
+                <div class="table-container">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th class="fixed-left">項目</th>
+                                {% for nutrient, _ in data.aafco_standards.items() %}
+                                    <th>{{ data.nutrient_labels[nutrient][0] }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th class="fixed-left">現状値</th>
+                                {% for nutrient, total in data.nutrient_totals.items() %}
+                                    <td class="{% if total < data.aafco_standards[nutrient] %}table-danger{% else %}table-success{% endif %}">
+                                        {{ total | round(2) }}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                            <tr>
+                                <th class="fixed-left">基準値</th>
+                                {% for nutrient, standard in data.aafco_standards.items() %}
+                                    <td>{{ standard | round(2) }}</td>
+                                {% endfor %}
+                            </tr>
+                            <tr>
+                                <th class="fixed-left">AAFCO適合</th>
+                                {% for nutrient, total in data.nutrient_totals.items() %}
+                                    <td class="{% if total < data.aafco_standards[nutrient] %}table-danger{% else %}table-success{% endif %}">
+                                        {% if total >= data.aafco_standards[nutrient] %}
+                                            <span style="color: green;">✔ 適合</span>
+                                        {% else %}
+                                            <span style="color: red;">✖ 不適合</span>
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 右上: 不足栄養素 -->
+            <div class="deficiency-section">
+                <h3>不足栄養素</h3>
+                <ul id="nutrient-table" class="list-group">
+                    {% for nutrient in data.deficiencies %}
+                    <li class="list-group-item">
+                        {{ data.nutrient_labels[nutrient][0] }}: 現状 {{ data.nutrient_totals[nutrient] | round(2) }} /
+                        基準 {{ data.aafco_standards[nutrient] | round(2) }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 下部エリア -->
+    <div class="container mt-4">
+        <h3>提案食材と選択された食材</h3>
+        <div class="d-flex">
+            <!-- 左: 提案食材 -->
+            <div class="flex-fill p-3" style="background: #FFF8E7; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <h4>提案食材</h4>
+                <ul id="suggested-ingredients" class="list-group">
+                    {% for nutrient, items in data.suggestions.items() %}
+                        <li class="list-group-item">
+                            <strong>{{ data.nutrient_labels[nutrient][0] }}</strong>
+                            <ul>
+                                {% for item in items %}
+                                    <li class="d-flex justify-content-between align-items-center">
+                                        <span>{{ item.name }} ({{ item.value | round(2) }} {{ data.nutrient_labels[nutrient][1] }})</span>
+                                        <button class="btn btn-sm btn-primary" onclick="addIngredient('{{ item.food_code }}', '{{ item.name }}')">追加</button>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- 右: 選択された食材 -->
+            <div class="flex-fill p-3" style="background: #FFF8E7; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <h4>選択された食材</h4>
+                <ul id="selected-ingredients" class="list-group"></ul>
+                <button class="btn btn-success mt-3" id="recalculate-btn" onclick="recalculate()">再計算する</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedIngredients = [];
+
+        function addIngredient(foodCode, name) {
+            if (selectedIngredients.some(item => item.food_code === foodCode)) {
+                alert("この食材は既に追加されています。");
+                return;
+            }
+            selectedIngredients.push({ food_code: foodCode, name: name, grams: 0 });
+            updateSelectedIngredients();
+        }
+
+        function removeIngredient(foodCode) {
+            selectedIngredients = selectedIngredients.filter(item => item.food_code !== foodCode);
+            updateSelectedIngredients();
+        }
+
+        function updateGrams(foodCode, grams) {
+            const ingredient = selectedIngredients.find(item => item.food_code === foodCode);
+            if (ingredient) {
+                ingredient.grams = parseFloat(grams) || 0;
+            }
+        }
+
+        function updateSelectedIngredients() {
+            const container = document.getElementById('selected-ingredients');
+            container.innerHTML = '';
+            selectedIngredients.forEach(item => {
+                container.innerHTML += `
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>${item.name}</span>
+                        <input type="number" class="form-control" style="width: 80px;" min="0" placeholder="グラム" oninput="updateGrams('${item.food_code}', this.value)">
+                        <button class="btn btn-sm btn-danger" onclick="removeIngredient('${item.food_code}')">削除</button>
+                    </li>
+                `;
+            });
+        }
+
+        function recalculate() {
+            console.log('再計算: ', selectedIngredients);
+        }
+    </script>
+</body>
+</html>
